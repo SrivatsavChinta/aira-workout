@@ -8,7 +8,7 @@ export const renderers: Record<string,(node:StatementNode,context:Context)=>HTML
   Keyword: ({props:p}) => {const n=el('div','','keyword');n.append(el('strong',String(p.text)));if(p.caption)n.append(el('p',String(p.caption)));return n;},
   Alert: ({props:p}) => el('aside',String(p.text),'block alert'),
   List: ({props:p},c) => {const n=el('ul','','block');for(const row of p.items as StatementNode[])n.append(renderComponent(row,c));return n;},
-  ListItem: ({props:p}) => el('li',String(p.text)),
+  ListItem: ({props:p}) => el('li',String(p.text),p.marker?'marker-'+String(p.marker):''),
   FollowUps: ({props:p},c) => {const n=el('div','','row');for(const text of p.prompts as string[])n.append(button(text,()=>c.send(text)));return n;},
   Timer: ({key,props:p},c) => {
     const n=el('section','','timer');n.setAttribute('aria-label',String(p.label));
