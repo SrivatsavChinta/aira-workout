@@ -77,10 +77,14 @@ function introduction(narrate: Narrate): Turn {
   ]);
   return { reply: fence('root = Screens([])') + '\n' + turn.reply };
 }
+const FIRST_QUESTION = 'How do you want to approach the week?';
+const FIRST_DESCRIPTIONS = ['You look at your existing commitments and consider when running might fit into your schedule.', 'You decide to see how the week unfolds and figure things out as you go.'];
+const SECOND_QUESTION = 'What would you like to do?';
+const SECOND_DESCRIPTIONS = ['Take another look at your commitments and reflect on how running could fit into your everyday life.', "Accept that this week hasn't worked out as expected and revisit the idea later."];
 const newWeek = (narrate: Narrate) => step(2, 'A New Week', [
   ...paragraphs('rq_s2', ["You look at your calendar. It's going to be a busy week, and you're not sure how running will fit into it."], narrate),
-  passage('rq_s2_p2', 'How do you want to approach the week?'),
-  ...choiceParts('rq_s2', FIRST_CHOICES, ['You look at your existing commitments and consider when running might fit into your schedule.', 'You decide to see how the week unfolds and figure things out as you go.']),
+  passage('rq_s2_p2', FIRST_QUESTION),
+  ...choiceParts('rq_s2', FIRST_CHOICES, FIRST_DESCRIPTIONS),
   part('rq_s2_actions', 'FollowUps', [...FIRST_CHOICES]),
 ]);
 export const RUNQUEST_CONSEQUENCES: Record<First, { title: string; story: string[] }> = {
@@ -93,8 +97,8 @@ function consequence(first: First, narrate: Narrate): Turn {
 }
 const reflect = (narrate: Narrate) => step(4, 'A Moment to Reflect', [
   ...paragraphs('rq_s4', ["It's Wednesday evening. Your week hasn't gone as expected.", "You still want to make running part of your life, but your current approach hasn't worked out as you imagined."], narrate),
-  passage('rq_s4_p3', 'What would you like to do?'),
-  ...choiceParts('rq_s4', SECOND_CHOICES, ['Take another look at your commitments and reflect on how running could fit into your everyday life.', "Accept that this week hasn't worked out as expected and revisit the idea later."]),
+  passage('rq_s4_p3', SECOND_QUESTION),
+  ...choiceParts('rq_s4', SECOND_CHOICES, SECOND_DESCRIPTIONS),
   part('rq_s4_actions', 'FollowUps', [...SECOND_CHOICES]),
 ]);
 function conclusion(first: First, second: Second, narrate: Narrate): Turn {
@@ -124,4 +128,37 @@ export function runQuestTurn(command: string, doc: ScreenDocument, narrate: Narr
   const recorded = recordedFirst(doc);
   if (command === 'continue') return recorded && hasScreen(doc, 'rq_s3') ? reflect(narrate) : outOfOrder();
   return recorded && second && hasScreen(doc, 'rq_s4') ? conclusion(recorded, second, narrate) : outOfOrder();
+}
+
+function recordedSecond(doc: ScreenDocument): Second | undefined {
+  const list = (doc.screens.find(s => s.key === 'rq_s5')?.props.children as StatementNode[] | undefined)?.find(n => n.key === 'rq_s5_choices');
+  const node = (list?.props.items as StatementNode[] | undefined)?.find(n => n.key === 'rq_c2');
+  const text = typeof node?.props.text === 'string' ? node.props.text.replace(/^Second decision: /, '') : '';
+  return match(SECOND_CHOICES, text.toLowerCase());
+}
+
+/** A button on the current RunQuest screen; `command` is the exact string runQuestTurn accepts for it. */
+export type RunQuestAction = { label: string; command: string; description: string };
+/** `context` says where the reader is in the story; it is only used in app-written replies. */
+export type RunQuestChoice = { question: string; context: string; actions: RunQuestAction[] };
+type Recorded = { first?: First; second?: Second };
+const action = (label: string, description: string): RunQuestAction => ({ label, command: label.toLowerCase(), description });
+const CURRENT_ACTIONS: Record<string, { question: string; context: (recorded: Recorded) => string; actions: RunQuestAction[] }> = {
+  rq_s1: { question: 'Are you ready to look at the week ahead?', context: () => "You're at the start of the story, looking back at your previous week.", actions: [action('Start your journey', 'Begin the story and look at the week ahead.')] },
+  rq_s2: { question: FIRST_QUESTION, context: () => "It's Monday, and a busy week is ahead of you.", actions: FIRST_CHOICES.map((choice, i) => action(choice, FIRST_DESCRIPTIONS[i])) },
+  rq_s3: { question: 'Are you ready to continue the story?', context: ({ first }) => first ? `You chose “${first}”, and now it's Wednesday.` : "It's Wednesday.", actions: [action('Continue', 'Move on to Wednesday evening.')] },
+  rq_s4: { question: SECOND_QUESTION, context: () => "It's Wednesday evening, and your week hasn't gone as expected.", actions: SECOND_CHOICES.map((choice, i) => action(choice, SECOND_DESCRIPTIONS[i])) },
+  rq_s5: {
+    question: 'Would you like to try another journey?',
+    context: ({ first, second }) => `${first && second ? `Your journey is complete: you chose “${first}” and then “${second}”.` : 'Your journey is complete.'} There are no more decisions to make, so take as long as you like with your reflection.`,
+    actions: [action(RESTART, 'Start the story again from the beginning.')],
+  },
+};
+
+/** The question, context and buttons of the RunQuest screen at the cursor, or null when no RunQuest screen is showing. */
+export function currentActions(doc: ScreenDocument): RunQuestChoice | null {
+  const screens = doc.screens;
+  if (!screens.length || !screens.every(s => SCREENS.includes(s.key)) || !Object.hasOwn(CURRENT_ACTIONS, doc.cursor)) return null;
+  const { question, context, actions } = CURRENT_ACTIONS[doc.cursor];
+  return { question, context: context({ first: recordedFirst(doc), second: recordedSecond(doc) }), actions };
 }

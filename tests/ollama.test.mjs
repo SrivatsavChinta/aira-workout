@@ -1,9 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
-import {ollamaTurn,rewritePassage,validateNarration,NARRATION_SYSTEM,OLLAMA_OPTIONS} from '../dist/server/ollama.js';
+import {ollamaTurn,rewritePassage,validateNarration,validateClassification,NARRATION_SYSTEM,OLLAMA_OPTIONS,CLASSIFY_SYSTEM,CLASSIFY_OPTIONS} from '../dist/server/ollama.js';
 import {mockTurn} from '../dist/server/mock.js';
-import {FIRST_CHOICES,SECOND_CHOICES,RUNQUEST_ENDINGS} from '../dist/server/runquest.js';
+import {FIRST_CHOICES,SECOND_CHOICES,RUNQUEST_ENDINGS,currentActions} from '../dist/server/runquest.js';
 import {ScreenDocument,splitReply} from '../dist/shared/openui/document.js';
 import {createApp,readConfig} from '../dist/server/app.js';
 import {providerStatuses} from '../dist/server/config.js';
@@ -122,4 +122,177 @@ test('HTTP: Ollama runtime requires enablement, readiness and consent, records t
   assert.equal(logged.length,2);assert.match(logged[0],/3\/3 passages rewritten$/);assert.match(logged[1],/0\/3 passages rewritten; 3 kept canonical text \(unavailable 3\)$/);
  }finally{await a.close();console.info=info;}
  assert(urls.length>0&&urls.every(u=>u.startsWith('http://localhost:11434/api/')));
+});
+
+// Natural-language decisions: a separate closed-label classification call picks a current button; runQuestTurn still drives state.
+const LABELS={
+ "Sounds good, let's begin.":'Start your journey',
+ "I'd rather keep things flexible this week.":'Stay Flexible',
+ 'I want to map out my schedule and see where running fits.':'Plan Ahead',
+ 'Okay, keep going.':'Continue',
+ 'Let me rethink how I handle this.':'Reconsider the Approach',
+ "Maybe I'll come back to it some other time.":'Leave It for Another Time',
+ "Let's do it all over again.":'Try Another Journey',
+};
+const SAID={'Plan Ahead':'I want to map out my schedule and see where running fits.','Stay Flexible':"I'd rather keep things flexible this week.",'Reconsider the Approach':'Let me rethink how I handle this.','Leave It for Another Time':"Maybe I'll come back to it some other time."};
+const messageOf=body=>body.prompt.match(/^Message: (.*)$/m)[1];
+/** Fake Ollama: classification calls answer from `answer(message)`, narration calls rewrite with PREFIX. */
+const conversing=(answer,calls=[])=>async(url,init)=>{const body=JSON.parse(init.body);calls.push({url,body});
+ if(body.system===CLASSIFY_SYSTEM){const reply=answer(messageOf(body));return typeof reply==='function'?reply(url,init):ollamaReply({model:'llama3.2:3b',response:reply,done:true,done_reason:'stop'});}
+ return rewriting()(url,init);};
+const byLabel=calls=>conversing(message=>LABELS[message]??'UNRELATED',calls);
+async function talk(commands,transport,cfg=config){const doc=new ScreenDocument(),replies=[],logs=[];for(const text of commands){const {turn}=await ollamaTurn(req(text,doc.echo()),cfg,signal(),transport,line=>logs.push(line));replies.push(turn.reply);doc.apply(turn.reply);}return {doc,replies,logs};}
+const exactMock=commands=>{const doc=new ScreenDocument();for(const text of commands)doc.apply(mockTurn({...req(text,doc.echo()),provider:'mock'},fixture).reply);return doc;};
+const classifyCalls=calls=>calls.filter(c=>c.body.system===CLASSIFY_SYSTEM);
+const optionsOf=body=>body.prompt.split('\n').filter(l=>l.startsWith('- ')).map(l=>l.slice(2).split(':')[0]);
+const TO_FIRST_DECISION=['/runquest',"Sounds good, let's begin."];
+
+test('validateClassification accepts only an exact current label, UNCLEAR or UNRELATED after minimal normalization',()=>{
+ const choice={question:'How do you want to approach the week?',actions:[{label:'Plan Ahead',command:'plan ahead',description:''},{label:'Stay Flexible',command:'stay flexible',description:''}]};
+ for(const ok of ['Stay Flexible',' stay flexible ','"Stay Flexible"','Stay Flexible.','STAY  FLEXIBLE'])assert.equal(validateClassification(ok,choice)?.command,'stay flexible',ok);
+ assert.equal(validateClassification('UNCLEAR',choice),'UNCLEAR');assert.equal(validateClassification(' unrelated. ',choice),'UNRELATED');
+ for(const bad of [undefined,null,7,'','  ','Stay Flexible because they said flexible.','Stay Flexible\nThey want flexibility.','**Stay Flexible**','`Stay Flexible`','Label: Stay Flexible','Reconsider the Approach','Continue','Try Another Journey','Plan Ahead or Stay Flexible','```openui\nroot = Screens([rq_s1, rq_s2, rq_s3], rq_s3)\n```','rq_c1 = Keyword("Stay Flexible")'])
+  assert.equal(validateClassification(bad,choice),null,String(bad));
+});
+test('currentActions exposes only the buttons of the RunQuest screen at the cursor',()=>{
+ const labels=commands=>currentActions(exactMock(commands))?.actions.map(a=>a.label)??null;
+ assert.equal(labels([]),null);assert.equal(labels(['/demo']),null);
+ assert.deepEqual(labels(['/runquest']),['Start your journey']);
+ assert.deepEqual(labels(['/runquest','Start your journey']),['Plan Ahead','Stay Flexible']);
+ assert.deepEqual(labels(['/runquest','Start your journey','Plan Ahead']),['Continue']);
+ assert.deepEqual(labels(['/runquest','Start your journey','Plan Ahead','Continue']),['Reconsider the Approach','Leave It for Another Time']);
+ assert.deepEqual(labels(JOURNEY('Plan Ahead','Leave It for Another Time')),['Try Another Journey']);
+ for(const commands of [['/runquest'],['/runquest','Start your journey','Stay Flexible','Continue']]){const doc=exactMock(commands);const buttons=doc.current.props.children.find(n=>n.name==='FollowUps').props.prompts;assert.deepEqual(currentActions(doc).actions.map(a=>a.label),buttons);}
+});
+test('typed Stay Flexible and Plan Ahead equivalents advance to the matching screen 3 exactly as the buttons do',async()=>{
+ for(const first of FIRST_CHOICES){const {doc,replies}=await talk([...TO_FIRST_DECISION,SAID[first]],byLabel());
+  assert.equal(doc.cursor,'rq_s3');assert.equal(child(doc,'rq_c1').props.text,first);assert.equal(child(doc,'rq_s3_title').props.text,first==='Plan Ahead'?'An Unexpected Change':'Where Did the Week Go?');
+  assert.equal(doc.echo().replaceAll(PREFIX,''),exactMock(['/runquest','Start your journey',first]).echo());assert(replies.at(-1).includes('```openui'));}
+});
+test('typed equivalents of every step reach all four existing endings with the same state as the buttons',async()=>{
+ for(const first of FIRST_CHOICES)for(const second of SECOND_CHOICES){const calls=[];
+  const {doc,logs}=await talk([...TO_FIRST_DECISION,SAID[first],'Okay, keep going.',SAID[second]],byLabel(calls));
+  assert.equal(doc.cursor,'rq_s5');assert.equal(doc.screens.length,5);assert.equal(child(doc,'rq_s5_p1').props.text,PREFIX+RUNQUEST_ENDINGS[first][second]);
+  assert.deepEqual(child(doc,'rq_s5_choices').props.items.map(i=>i.props.text),[`First decision: ${first}`,`Second decision: ${second}`]);
+  assert.equal(doc.echo().replaceAll(PREFIX,''),exactMock(JOURNEY(first,second)).echo());
+  assert.equal(classifyCalls(calls).length,4);assert.equal(logs.filter(l=>/classification action$/.test(l)).length,4);}
+});
+test('the classifier sees only the current question, its permitted actions and the latest message, with deterministic small settings',async()=>{
+ const calls=[];await talk([...TO_FIRST_DECISION,SAID['Plan Ahead'],'Okay, keep going.',SAID['Reconsider the Approach'],"Let's do it all over again."],byLabel(calls));
+ const sent=classifyCalls(calls).map(c=>c.body);
+ assert.deepEqual(sent.map(optionsOf),[['Start your journey','UNCLEAR','UNRELATED'],['Plan Ahead','Stay Flexible','UNCLEAR','UNRELATED'],['Continue','UNCLEAR','UNRELATED'],['Reconsider the Approach','Leave It for Another Time','UNCLEAR','UNRELATED'],['Try Another Journey','UNCLEAR','UNRELATED']]);
+ assert(sent[1].prompt.startsWith('Question: How do you want to approach the week?\n'));assert.equal(messageOf(sent[1]),SAID['Plan Ahead']);
+ for(const body of sent){assert.equal(body.model,'llama3.2:3b');assert.equal(body.stream,false);assert.deepEqual(body.options,CLASSIFY_OPTIONS);assert.doesNotMatch(body.prompt,/openui|Screens|FollowUps|Keyword|rq_|```/);}
+ assert.equal(CLASSIFY_OPTIONS.temperature,0);assert(CLASSIFY_OPTIONS.num_predict<=16);assert(!('num_ctx' in CLASSIFY_OPTIONS));
+ assert(classifyCalls(calls).every(c=>c.url==='http://localhost:11434/api/generate'));
+});
+test('exact commands and button labels bypass classification',async()=>{
+ const calls=[];for(const first of FIRST_CHOICES)for(const second of SECOND_CHOICES)await talk([...JOURNEY(first,second),'Try Another Journey','start runquest'],byLabel(calls));
+ await talk(['/runquest','Start your journey','Leave It for Another Time','CONTINUE'],byLabel(calls));
+ assert.equal(classifyCalls(calls).length,0);assert(calls.length>0);
+});
+test('passage rewrites still receive only narrative passages, never typed messages, option lists or app state',async()=>{
+ const calls=[];await talk([...TO_FIRST_DECISION,SAID['Stay Flexible'],'Okay, keep going.',SAID['Leave It for Another Time']],byLabel(calls));
+ const rewrites=calls.filter(c=>c.body.system===NARRATION_SYSTEM);assert(rewrites.length>0);
+ for(const {body} of rewrites){assert(body.prompt.startsWith('Passage:\n'));assert.doesNotMatch(body.prompt,/UNCLEAR|UNRELATED|Options:|Question:|Message:|openui|Screens|rq_/);
+  for(const text of [...Object.keys(LABELS),...FIRST_CHOICES,...SECOND_CHOICES,'Try Another Journey'])assert(!body.prompt.includes(text),text);}
+});
+// Each RunQuest screen reached by typed choices, with the exact replies expected for UNCLEAR and UNRELATED there.
+const SCREEN_SETUPS={
+ rq_s1:['/runquest'],
+ rq_s2:TO_FIRST_DECISION,
+ rq_s3:[...TO_FIRST_DECISION,SAID['Plan Ahead']],
+ rq_s4:[...TO_FIRST_DECISION,SAID['Stay Flexible'],'Okay, keep going.'],
+ rq_s5:[...TO_FIRST_DECISION,SAID['Stay Flexible'],'Okay, keep going.',SAID['Reconsider the Approach']],
+};
+const CONTEXTUAL={
+ rq_s1:{
+  UNCLEAR:"I wasn't sure what you'd like to do, so the story is staying where it is. You're at the start of the story, looking back at your previous week. Are you ready to look at the week ahead? If so, choose “Start your journey”, or say so in your own words.",
+  UNRELATED:"That doesn't seem to be about this part of the story, so let's come back to it. You're at the start of the story, looking back at your previous week. Are you ready to look at the week ahead? If so, choose “Start your journey”, or say so in your own words.",
+ },
+ rq_s2:{
+  UNCLEAR:"I couldn't tell which option you meant, so nothing has changed yet. How do you want to approach the week? You can choose “Plan Ahead” or “Stay Flexible”. Which one is closer to what you'd like?",
+  UNRELATED:"That doesn't seem to be about this part of the story, so let's come back to it. It's Monday, and a busy week is ahead of you. How do you want to approach the week? “Plan Ahead”: You look at your existing commitments and consider when running might fit into your schedule. “Stay Flexible”: You decide to see how the week unfolds and figure things out as you go. Type the one you prefer, or use the buttons.",
+ },
+ rq_s3:{
+  UNCLEAR:"I wasn't sure what you'd like to do, so the story is staying where it is. You chose “Plan Ahead”, and now it's Wednesday. Are you ready to continue the story? If so, choose “Continue”, or say so in your own words.",
+  UNRELATED:"That doesn't seem to be about this part of the story, so let's come back to it. You chose “Plan Ahead”, and now it's Wednesday. Are you ready to continue the story? If so, choose “Continue”, or say so in your own words.",
+ },
+ rq_s4:{
+  UNCLEAR:"I couldn't tell which option you meant, so nothing has changed yet. What would you like to do? You can choose “Reconsider the Approach” or “Leave It for Another Time”. Which one is closer to what you'd like?",
+  UNRELATED:"That doesn't seem to be about this part of the story, so let's come back to it. It's Wednesday evening, and your week hasn't gone as expected. What would you like to do? “Reconsider the Approach”: Take another look at your commitments and reflect on how running could fit into your everyday life. “Leave It for Another Time”: Accept that this week hasn't worked out as expected and revisit the idea later. Type the one you prefer, or use the buttons.",
+ },
+ rq_s5:{
+  UNCLEAR:"I wasn't sure what you'd like to do, so the story is staying where it is. Your journey is complete: you chose “Stay Flexible” and then “Reconsider the Approach”. There are no more decisions to make, so take as long as you like with your reflection. Would you like to try another journey? If so, choose “Try Another Journey”, or say so in your own words.",
+  UNRELATED:"That doesn't seem to be about this part of the story, so let's come back to it. Your journey is complete: you chose “Stay Flexible” and then “Reconsider the Approach”. There are no more decisions to make, so take as long as you like with your reflection. Would you like to try another journey? If so, choose “Try Another Journey”, or say so in your own words.",
+ },
+};
+test('UNCLEAR and UNRELATED replies follow the current screen question, context and options, and change nothing',async()=>{
+ for(const [screen,setup] of Object.entries(SCREEN_SETUPS))for(const label of ['UNCLEAR','UNRELATED']){
+  const message=label==='UNCLEAR'?"Maybe, I'm not sure.":'What should I cook for dinner tonight?';
+  const before=(await talk(setup,byLabel())).doc;assert.equal(before.cursor,screen);
+  const calls=[];const {doc,replies,logs}=await talk([...setup,message],conversing(m=>m===message?label:LABELS[m],calls));
+  const reply=replies.at(-1),name=`${screen} ${label}`;
+  assert.equal(reply,CONTEXTUAL[screen][label],name);assert(!reply.includes('```'),name);assert.doesNotMatch(reply,/\d/,name);
+  assert.equal(doc.echo(),before.echo(),name);assert.equal(doc.cursor,screen,name);assert.equal(doc.screens.length,before.screens.length,name);
+  const turnCalls=calls.slice(calls.findLastIndex(c=>c.body.system===CLASSIFY_SYSTEM));assert.equal(turnCalls.length,1,name);assert.equal(turnCalls[0].body.system,CLASSIFY_SYSTEM,name);
+  assert.match(logs.at(-1),new RegExp(`classification ${label.toLowerCase()}$`),name);}
+});
+test('after an unclear or unrelated reply, a typed choice and an exact command on the same screen still work',async()=>{
+ const unsure=conversing(m=>m==="Maybe, I'm not sure."?'UNCLEAR':m==='What should I cook for dinner tonight?'?'UNRELATED':LABELS[m]);
+ const typed=await talk([...SCREEN_SETUPS.rq_s4,"Maybe, I'm not sure.",'What should I cook for dinner tonight?',SAID['Leave It for Another Time']],unsure);
+ assert.equal(typed.doc.cursor,'rq_s5');assert.equal(child(typed.doc,'rq_s5_p1').props.text,PREFIX+RUNQUEST_ENDINGS['Stay Flexible']['Leave It for Another Time']);
+ const exact=await talk([...SCREEN_SETUPS.rq_s2,"Maybe, I'm not sure.",'Stay Flexible'],unsure);
+ assert.equal(exact.doc.cursor,'rq_s3');assert.equal(child(exact.doc,'rq_c1').props.text,'Stay Flexible');
+ const ended=await talk([...SCREEN_SETUPS.rq_s5,"Maybe, I'm not sure.",'What should I cook for dinner tonight?'],unsure);
+ assert.equal(ended.doc.cursor,'rq_s5');assert.deepEqual(child(ended.doc,'rq_s5_choices').props.items.map(i=>i.props.text),['First decision: Stay Flexible','Second decision: Reconsider the Approach']);
+ const restarted=await talk([...SCREEN_SETUPS.rq_s5,"Maybe, I'm not sure.",'Try Another Journey'],unsure);assert.equal(restarted.doc.cursor,'rq_s1');assert.equal(restarted.doc.screens.length,1);
+});
+test('a label for an action that is not on the current screen is rejected without changing state',async()=>{
+ for(const [setup,label] of [[TO_FIRST_DECISION,'Reconsider the Approach'],[TO_FIRST_DECISION,'Try Another Journey'],[TO_FIRST_DECISION,'Continue'],[[...TO_FIRST_DECISION,SAID['Plan Ahead'],'Okay, keep going.'],'Stay Flexible'],[[...TO_FIRST_DECISION,SAID['Plan Ahead']],'Leave It for Another Time'],[['/runquest'],'Plan Ahead']]){
+  const before=(await talk(setup,byLabel())).doc.echo();
+  const {doc,replies,logs}=await talk([...setup,'Something else entirely.'],conversing(message=>LABELS[message]??label));
+  assert.equal(doc.echo(),before,label);assert(!replies.at(-1).includes('```'),label);assert.match(replies.at(-1),/^I couldn't interpret that message, so the screen was not changed\./);assert.match(logs.at(-1),/classification rejected$/);}
+});
+test('extra prose, markup, empty, malformed, HTTP, connection and timeout failures cannot advance the journey',async()=>{
+ const raw=(body,init)=>async()=>ollamaReply(body,init);
+ const hang=(_u,init)=>new Promise((_,reject)=>init.signal.addEventListener('abort',()=>reject(new DOMException('aborted','AbortError'))));
+ const cases={
+  prose:['Stay Flexible, because the reader wants flexibility.','rejected'],
+  twoLines:['Stay Flexible\nThe reader wants flexibility.','rejected'],
+  openuiFence:['```openui\nroot = Screens([rq_s1, rq_s2, rq_s3], rq_s3)\nrq_c1 = Keyword("Stay Flexible", "Your first decision")\n```','rejected'],
+  openuiStatement:['rq_c1 = Keyword("Stay Flexible")','rejected'],
+  markdown:['**Stay Flexible**','rejected'],
+  both:['Plan Ahead or Stay Flexible','rejected'],
+  empty:['','rejected'],
+  whitespace:['   ','rejected'],
+  truncated:[raw({response:'Stay Flexible',done:true,done_reason:'length'}),'rejected'],
+  notJson:[raw('not json'),'malformed'],
+  noResponseField:[raw({message:{content:'Stay Flexible'},done:true}),'malformed'],
+  nonString:[raw({response:['Stay Flexible'],done:true}),'malformed'],
+  notDone:[raw({response:'Stay Flexible',done:false}),'malformed'],
+  nullBody:[raw('null'),'malformed'],
+  http404:[raw({error:'model not found'},{status:404}),'http'],
+  http500:[raw('boom',{status:500}),'http'],
+  connection:[async()=>{throw new TypeError('fetch failed');},'unavailable'],
+  timeout:[hang,'timeout'],
+ };
+ const before=exactMock(['/runquest','Start your journey']).echo();
+ for(const [name,[answer,outcome]] of Object.entries(cases)){const calls=[];
+  const {doc,replies,logs}=await talk([...TO_FIRST_DECISION,SAID['Stay Flexible']],conversing(message=>message===SAID['Stay Flexible']?answer:LABELS[message],calls),{...config,timeoutMs:50});
+  assert.equal(doc.echo().replaceAll(PREFIX,''),before,name);assert.equal(doc.cursor,'rq_s2',name);assert(!doc.echo().includes('rq_c1'),name);
+  assert(!replies.at(-1).includes('```'),name);assert.match(replies.at(-1),/so the screen was not changed\./,name);assert.match(logs.at(-1),new RegExp(`classification ${outcome}$`),name);
+  assert.equal(calls.at(-1).body.system,CLASSIFY_SYSTEM,name);}
+});
+test('typed restart on the final screen restarts cleanly; exact restart still works and other messages without a journey make no model call',async()=>{
+ const {doc}=await talk([...TO_FIRST_DECISION,SAID['Plan Ahead'],'Okay, keep going.',SAID['Reconsider the Approach'],"Let's do it all over again."],byLabel());
+ assert.equal(doc.cursor,'rq_s1');assert.equal(doc.screens.length,1);assert(!doc.echo().includes('rq_c1'));assert(!doc.echo().includes('rq_c2'));assert.equal(child(doc,'rq_week').props.items.length,7);
+ const midway=await talk([...TO_FIRST_DECISION,SAID['Stay Flexible'],'Try Another Journey'],byLabel());assert.equal(midway.doc.cursor,'rq_s1');assert(!midway.doc.echo().includes('rq_c1'));
+ let calls=0;const counting=async(u,init)=>{calls++;return byLabel()(u,init);};
+ const none=await ollamaTurn(req("I'd rather keep things flexible this week."),config,signal(),counting);assert.equal(calls,0);assert.equal(none.turn.reply,'Ollama mode only narrates RunQuest. Choose Start RunQuest or type /runquest.');
+ const demo=exactMock(['/demo']);const other=await ollamaTurn(req('Okay, keep going.',demo.echo()),config,signal(),counting);assert.equal(calls,0);assert(other.turn.reply.startsWith('Ollama mode only narrates RunQuest'));
+});
+test('Mock stays exact-command only: typed equivalents are not interpreted',()=>{
+ const doc=exactMock(['/runquest','Start your journey']);const reply=mockTurn({...req(SAID['Stay Flexible'],doc.echo()),provider:'mock'},fixture).reply;
+ assert(reply.includes('Mock only understands'));assert(!reply.includes('```'));
 });

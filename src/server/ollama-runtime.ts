@@ -74,6 +74,6 @@ export class OllamaRuntime {
     if (!response?.ok) return { state: 'unavailable', message: 'Ollama is running but its model list could not be read. Restart Ollama and select Ollama again.' };
     const wanted = this.config.model.includes(':') ? this.config.model : `${this.config.model}:latest`;
     if (!names.includes(wanted)) return { state: 'missing-model', message: `Model ${this.config.model} is not installed in Ollama. The app never downloads models; run \`ollama pull ${this.config.model}\` in a terminal, then select Ollama again.` };
-    return { state: 'ready', message: `Ollama ready · ${this.config.model} at ${this.config.url}. Story passages are reworded locally; the app still decides screens, choices and outcomes. No cloud fallback.` };
+    return { state: 'ready', message: `Ollama ready · ${this.config.model} at ${this.config.url}. Typed messages are matched to the current buttons and story passages are reworded locally; the app still decides screens, choices and outcomes. No cloud fallback.` };
   }
 }
