@@ -39,6 +39,13 @@ test('RunQuest: calendar, both decisions, ending and restart through Mock button
  await click('Leave It for Another Time');await expect(page.locator('#screen h3')).toHaveText('Your Reflection');await expect(page.locator('#navigation')).toBeHidden();await expect(page.locator('[data-statement="rq_s5_p1"]')).toContainText('The week became busy before you found an opportunity');await expect(page.locator('[data-statement="rq_s5_choices"]')).toContainText('First decision: Stay Flexible');
  await click('Try Another Journey');await expect(page.locator('#screen h3')).toHaveText('Your Running Journey');await expect(page.locator('#navigation')).toBeHidden();expect(await page.locator('#state-json').textContent()).not.toContain('rq_c1');expect(errors).toEqual([]);
 });
+for(const fault of ['schema','request'])test(`RunQuest: ${fault} failure on a choice keeps the screen and Retry advances`,async({page})=>{
+ const title=page.locator('#screen h3');const choose=name=>page.locator('#screen').getByRole('button',{name,exact:true}).click();
+ await page.locator('#runquest').click();await expect(title).toHaveText('Your Running Journey');await choose('Start your journey');await expect(title).toHaveText('A New Week');
+ await page.locator('.builder').evaluate(e=>e.open=true);await page.locator('#fault').selectOption(fault);await choose('Plan Ahead');await expect(page.locator('#pending')).toBeHidden();
+ await expect(page.locator('#error')).toBeVisible();await expect(page.locator('#retry')).toBeVisible();await expect(title).toHaveText('A New Week');expect(await page.locator('#state-json').textContent()).not.toContain('rq_c1');
+ await page.locator('#retry').click();await expect(page.locator('#pending')).toBeHidden();await expect(title).toHaveText('An Unexpected Change');await expect(page.locator('#error')).toBeHidden();await expect(page.locator('[data-statement="rq_c1"]')).toContainText('Plan Ahead');
+});
 test('non-RunQuest lists with plus/minus markers keep default rendering and fixture stepper',async({page})=>{
  await demo(page);await page.locator('.builder').evaluate(e=>e.open=true);await page.locator('#patch').fill('page1 = Screen([heading1, count1, note1, cue1, pros1])\npros1 = List([pro1, con1])\npro1 = ListItem("Upside", "plus")\ncon1 = ListItem("Downside", "minus")');await page.locator('#apply-patch').click();
  const list=page.locator('[data-statement="pros1"]');await expect(list.locator('li')).toHaveCount(2);expect(await list.evaluate(e=>getComputedStyle(e).display)).toBe('block');expect(await list.locator('li').first().evaluate(e=>getComputedStyle(e).display)).toBe('list-item');

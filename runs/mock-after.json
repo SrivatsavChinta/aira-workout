@@ -1,0 +1,145 @@
+{
+  "format": "aira-workout-run-v1",
+  "label": "after",
+  "appVersion": "2.0.0",
+  "schemaVersion": "3",
+  "selectedProvider": "mock",
+  "note": "Completed the full RunQuest journey in Mock mode using the available buttons",
+  "events": [
+    {
+      "kind": "input",
+      "text": "/runquest",
+      "at": "2026-10-09T13:24:38.277Z"
+    },
+    {
+      "kind": "response",
+      "result": {
+        "turn": {
+          "reply": "```openui\nroot = Screens([])\n```\nRunQuest · Step 1 of 5: Your Running Journey.\n```openui\nroot = Screens([rq_s1], rq_s1)\nrq_s1 = Screen([rq_s1_step, rq_s1_title, rq_s1_p1, rq_s1_p2, rq_s1_p3, rq_s1_p4, rq_s1_history, rq_s1_period, rq_week, rq_s1_totals, rq_s1_note, rq_s1_actions, rq_s1_cue])\nrq_s1_step = Text(\"RunQuest · Step 1 of 5\", \"body\", \"#666666\")\nrq_s1_title = Text(\"Your Running Journey\", \"title\")\nrq_s1_p1 = Text(\"Two weeks ago, you decided to start running.\")\nrq_s1_p2 = Text(\"Initially, you felt motivated. But lately, work and everyday responsibilities have made it difficult to stay consistent.\")\nrq_s1_p3 = Text(\"It's Monday, and you're about to start another week. You want to keep running, but you're still figuring out how to make it part of your routine.\")\nrq_s1_p4 = Text(\"Let's see how your decisions shape the week ahead.\")\nrq_s1_history = Text(\"Your Running History\", \"subtitle\")\nrq_s1_period = Text(\"Your previous seven days\", \"body\", \"#666666\")\nrq_week = List([rq_day1, rq_day2, rq_day3, rq_day4, rq_day5, rq_day6, rq_day7])\nrq_day1 = ListItem(\"Mon\\n2.0 km\", \"plus\")\nrq_day2 = ListItem(\"Tue\\n—\", \"minus\")\nrq_day3 = ListItem(\"Wed\\n—\", \"minus\")\nrq_day4 = ListItem(\"Thu\\n3.0 km\", \"plus\")\nrq_day5 = ListItem(\"Fri\\n—\", \"minus\")\nrq_day6 = ListItem(\"Sat\\n2.5 km\", \"plus\")\nrq_day7 = ListItem(\"Sun\\n—\", \"minus\")\nrq_s1_totals = Text(\"Running days: 3 · Total distance: 7.5 km\")\nrq_s1_note = Alert(\"info\", \"Example running history for this interactive journey. These numbers are not targets or recommendations.\")\nrq_s1_actions = FollowUps([\"Start your journey\"])\nrq_s1_cue = Cue(\"Two weeks ago, you decided to start running. Initially, you felt motivated. But lately, work and everyday responsibilities have made it difficult to stay consistent. It's Monday, and you're about to start another week. You want to keep running, but you're still figuring out how to make it part of your routine. Let's see how your decisions shape the week ahead.\")\n```"
+        },
+        "versions": {
+          "app": "2.0.0",
+          "schema": "3",
+          "skillHash": "51d441b013b27d6c5317cb9fe43ecc78a585e4367a375e0b9d7e1360aef7336c",
+          "protocolHash": "bea7b61d49b7c5f32a74cc797d93f6537c699d682f4e3b1043e93d0233d69c2d",
+          "mode": "mock",
+          "provider": "mock",
+          "model": "wiring-fixture-v1",
+          "returnedModel": null,
+          "runtimeVersion": null,
+          "restrictionProfile": null
+        }
+      },
+      "at": "2026-10-09T13:24:38.714Z"
+    },
+    {
+      "kind": "input",
+      "text": "Start your journey",
+      "at": "2026-10-09T13:24:43.112Z"
+    },
+    {
+      "kind": "response",
+      "result": {
+        "turn": {
+          "reply": "RunQuest · Step 2 of 5: A New Week.\n```openui\nroot = Screens([rq_s1, rq_s2], rq_s2)\nrq_s2 = Screen([rq_s2_step, rq_s2_title, rq_s2_p1, rq_s2_p2, rq_s2_opt1, rq_s2_opt1_text, rq_s2_opt2, rq_s2_opt2_text, rq_s2_actions, rq_s2_cue])\nrq_s2_step = Text(\"RunQuest · Step 2 of 5\", \"body\", \"#666666\")\nrq_s2_title = Text(\"A New Week\", \"title\")\nrq_s2_p1 = Text(\"You look at your calendar. It's going to be a busy week, and you're not sure how running will fit into it.\")\nrq_s2_p2 = Text(\"How do you want to approach the week?\")\nrq_s2_opt1 = Text(\"Plan Ahead\", \"subtitle\")\nrq_s2_opt1_text = Text(\"You look at your existing commitments and consider when running might fit into your schedule.\")\nrq_s2_opt2 = Text(\"Stay Flexible\", \"subtitle\")\nrq_s2_opt2_text = Text(\"You decide to see how the week unfolds and figure things out as you go.\")\nrq_s2_actions = FollowUps([\"Plan Ahead\",\"Stay Flexible\"])\nrq_s2_cue = Cue(\"You look at your calendar. It's going to be a busy week, and you're not sure how running will fit into it. How do you want to approach the week?\")\n```"
+        },
+        "versions": {
+          "app": "2.0.0",
+          "schema": "3",
+          "skillHash": "51d441b013b27d6c5317cb9fe43ecc78a585e4367a375e0b9d7e1360aef7336c",
+          "protocolHash": "bea7b61d49b7c5f32a74cc797d93f6537c699d682f4e3b1043e93d0233d69c2d",
+          "mode": "mock",
+          "provider": "mock",
+          "model": "wiring-fixture-v1",
+          "returnedModel": null,
+          "runtimeVersion": null,
+          "restrictionProfile": null
+        }
+      },
+      "at": "2026-10-09T13:24:43.481Z"
+    },
+    {
+      "kind": "input",
+      "text": "Plan Ahead",
+      "at": "2026-10-09T13:24:45.490Z"
+    },
+    {
+      "kind": "response",
+      "result": {
+        "turn": {
+          "reply": "RunQuest · Step 3 of 5: An Unexpected Change.\n```openui\nroot = Screens([rq_s1, rq_s2, rq_s3], rq_s3)\nrq_s3 = Screen([rq_s3_step, rq_s3_title, rq_s3_p1, rq_s3_p2, rq_c1, rq_s3_actions, rq_s3_cue])\nrq_s3_step = Text(\"RunQuest · Step 3 of 5\", \"body\", \"#666666\")\nrq_s3_title = Text(\"An Unexpected Change\", \"title\")\nrq_s3_p1 = Text(\"It's Wednesday. An unexpected work commitment disrupts your plans for the week.\")\nrq_s3_p2 = Text(\"You had considered when running might fit into your schedule, but now things have changed.\")\nrq_c1 = Keyword(\"Plan Ahead\", \"Your first decision\")\nrq_s3_actions = FollowUps([\"Continue\"])\nrq_s3_cue = Cue(\"It's Wednesday. An unexpected work commitment disrupts your plans for the week. You had considered when running might fit into your schedule, but now things have changed.\")\n```"
+        },
+        "versions": {
+          "app": "2.0.0",
+          "schema": "3",
+          "skillHash": "51d441b013b27d6c5317cb9fe43ecc78a585e4367a375e0b9d7e1360aef7336c",
+          "protocolHash": "bea7b61d49b7c5f32a74cc797d93f6537c699d682f4e3b1043e93d0233d69c2d",
+          "mode": "mock",
+          "provider": "mock",
+          "model": "wiring-fixture-v1",
+          "returnedModel": null,
+          "runtimeVersion": null,
+          "restrictionProfile": null
+        }
+      },
+      "at": "2026-10-09T13:24:45.858Z"
+    },
+    {
+      "kind": "input",
+      "text": "Continue",
+      "at": "2026-10-09T13:24:47.440Z"
+    },
+    {
+      "kind": "response",
+      "result": {
+        "turn": {
+          "reply": "RunQuest · Step 4 of 5: A Moment to Reflect.\n```openui\nroot = Screens([rq_s1, rq_s2, rq_s3, rq_s4], rq_s4)\nrq_s4 = Screen([rq_s4_step, rq_s4_title, rq_s4_p1, rq_s4_p2, rq_s4_p3, rq_s4_opt1, rq_s4_opt1_text, rq_s4_opt2, rq_s4_opt2_text, rq_s4_actions, rq_s4_cue])\nrq_s4_step = Text(\"RunQuest · Step 4 of 5\", \"body\", \"#666666\")\nrq_s4_title = Text(\"A Moment to Reflect\", \"title\")\nrq_s4_p1 = Text(\"It's Wednesday evening. Your week hasn't gone as expected.\")\nrq_s4_p2 = Text(\"You still want to make running part of your life, but your current approach hasn't worked out as you imagined.\")\nrq_s4_p3 = Text(\"What would you like to do?\")\nrq_s4_opt1 = Text(\"Reconsider the Approach\", \"subtitle\")\nrq_s4_opt1_text = Text(\"Take another look at your commitments and reflect on how running could fit into your everyday life.\")\nrq_s4_opt2 = Text(\"Leave It for Another Time\", \"subtitle\")\nrq_s4_opt2_text = Text(\"Accept that this week hasn't worked out as expected and revisit the idea later.\")\nrq_s4_actions = FollowUps([\"Reconsider the Approach\",\"Leave It for Another Time\"])\nrq_s4_cue = Cue(\"It's Wednesday evening. Your week hasn't gone as expected. You still want to make running part of your life, but your current approach hasn't worked out as you imagined. What would you like to do?\")\n```"
+        },
+        "versions": {
+          "app": "2.0.0",
+          "schema": "3",
+          "skillHash": "51d441b013b27d6c5317cb9fe43ecc78a585e4367a375e0b9d7e1360aef7336c",
+          "protocolHash": "bea7b61d49b7c5f32a74cc797d93f6537c699d682f4e3b1043e93d0233d69c2d",
+          "mode": "mock",
+          "provider": "mock",
+          "model": "wiring-fixture-v1",
+          "returnedModel": null,
+          "runtimeVersion": null,
+          "restrictionProfile": null
+        }
+      },
+      "at": "2026-10-09T13:24:47.807Z"
+    },
+    {
+      "kind": "input",
+      "text": "Reconsider the Approach",
+      "at": "2026-10-09T13:24:51.720Z"
+    },
+    {
+      "kind": "response",
+      "result": {
+        "turn": {
+          "reply": "RunQuest · Step 5 of 5: Your Reflection.\n```openui\nroot = Screens([rq_s1, rq_s2, rq_s3, rq_s4, rq_s5], rq_s5)\nrq_s5 = Screen([rq_s5_step, rq_s5_title, rq_s5_p1, rq_s5_choices, rq_s5_note, rq_s5_actions, rq_s5_cue])\nrq_s5_step = Text(\"RunQuest · Step 5 of 5\", \"body\", \"#666666\")\nrq_s5_title = Text(\"Your Reflection\", \"title\")\nrq_s5_p1 = Text(\"Your plans changed when an unexpected commitment appeared. You explored how reconsidering your approach can help you think about consistency when circumstances change.\", \"description\")\nrq_s5_choices = List([rq_s5_first, rq_c2])\nrq_s5_first = ListItem(\"First decision: Plan Ahead\")\nrq_c2 = ListItem(\"Second decision: Reconsider the Approach\")\nrq_s5_note = Alert(\"info\", \"RunQuest is a fictional journey about habits and everyday decisions. It isn't advice, a running plan or a recommendation.\")\nrq_s5_actions = FollowUps([\"Try Another Journey\"])\nrq_s5_cue = Cue(\"Your plans changed when an unexpected commitment appeared. You explored how reconsidering your approach can help you think about consistency when circumstances change.\")\n```"
+        },
+        "versions": {
+          "app": "2.0.0",
+          "schema": "3",
+          "skillHash": "51d441b013b27d6c5317cb9fe43ecc78a585e4367a375e0b9d7e1360aef7336c",
+          "protocolHash": "bea7b61d49b7c5f32a74cc797d93f6537c699d682f4e3b1043e93d0233d69c2d",
+          "mode": "mock",
+          "provider": "mock",
+          "model": "wiring-fixture-v1",
+          "returnedModel": null,
+          "runtimeVersion": null,
+          "restrictionProfile": null
+        }
+      },
+      "at": "2026-10-09T13:24:52.082Z"
+    }
+  ],
+  "state": {
+    "ui_state": "root = Screens([rq_s1, rq_s2, rq_s3, rq_s4, rq_s5], rq_s5)\nrq_s1 = Screen([rq_s1_step, rq_s1_title, rq_s1_p1, rq_s1_p2, rq_s1_p3, rq_s1_p4, rq_s1_history, rq_s1_period, rq_week, rq_s1_totals, rq_s1_note, rq_s1_actions, rq_s1_cue])\nrq_s1_step = Text(\"RunQuest · Step 1 of 5\", \"body\", \"#666666\")\nrq_s1_title = Text(\"Your Running Journey\", \"title\")\nrq_s1_p1 = Text(\"Two weeks ago, you decided to start running.\")\nrq_s1_p2 = Text(\"Initially, you felt motivated. But lately, work and everyday responsibilities have made it difficult to stay consistent.\")\nrq_s1_p3 = Text(\"It's Monday, and you're about to start another week. You want to keep running, but you're still figuring out how to make it part of your routine.\")\nrq_s1_p4 = Text(\"Let's see how your decisions shape the week ahead.\")\nrq_s1_history = Text(\"Your Running History\", \"subtitle\")\nrq_s1_period = Text(\"Your previous seven days\", \"body\", \"#666666\")\nrq_week = List([rq_day1, rq_day2, rq_day3, rq_day4, rq_day5, rq_day6, rq_day7])\nrq_day1 = ListItem(\"Mon\\n2.0 km\", \"plus\")\nrq_day2 = ListItem(\"Tue\\n—\", \"minus\")\nrq_day3 = ListItem(\"Wed\\n—\", \"minus\")\nrq_day4 = ListItem(\"Thu\\n3.0 km\", \"plus\")\nrq_day5 = ListItem(\"Fri\\n—\", \"minus\")\nrq_day6 = ListItem(\"Sat\\n2.5 km\", \"plus\")\nrq_day7 = ListItem(\"Sun\\n—\", \"minus\")\nrq_s1_totals = Text(\"Running days: 3 · Total distance: 7.5 km\")\nrq_s1_note = Alert(\"info\", \"Example running history for this interactive journey. These numbers are not targets or recommendations.\")\nrq_s1_actions = FollowUps([\"Start your journey\"])\nrq_s1_cue = Cue(\"Two weeks ago, you decided to start running. Initially, you felt motivated. But lately, work and everyday responsibilities have made it difficult to stay consistent. It's Monday, and you're about to start another week. You want to keep running, but you're still figuring out how to make it part of your routine. Let's see how your decisions shape the week ahead.\")\nrq_s2 = Screen([rq_s2_step, rq_s2_title, rq_s2_p1, rq_s2_p2, rq_s2_opt1, rq_s2_opt1_text, rq_s2_opt2, rq_s2_opt2_text, rq_s2_actions, rq_s2_cue])\nrq_s2_step = Text(\"RunQuest · Step 2 of 5\", \"body\", \"#666666\")\nrq_s2_title = Text(\"A New Week\", \"title\")\nrq_s2_p1 = Text(\"You look at your calendar. It's going to be a busy week, and you're not sure how running will fit into it.\")\nrq_s2_p2 = Text(\"How do you want to approach the week?\")\nrq_s2_opt1 = Text(\"Plan Ahead\", \"subtitle\")\nrq_s2_opt1_text = Text(\"You look at your existing commitments and consider when running might fit into your schedule.\")\nrq_s2_opt2 = Text(\"Stay Flexible\", \"subtitle\")\nrq_s2_opt2_text = Text(\"You decide to see how the week unfolds and figure things out as you go.\")\nrq_s2_actions = FollowUps([\"Plan Ahead\",\"Stay Flexible\"])\nrq_s2_cue = Cue(\"You look at your calendar. It's going to be a busy week, and you're not sure how running will fit into it. How do you want to approach the week?\")\nrq_s3 = Screen([rq_s3_step, rq_s3_title, rq_s3_p1, rq_s3_p2, rq_c1, rq_s3_actions, rq_s3_cue])\nrq_s3_step = Text(\"RunQuest · Step 3 of 5\", \"body\", \"#666666\")\nrq_s3_title = Text(\"An Unexpected Change\", \"title\")\nrq_s3_p1 = Text(\"It's Wednesday. An unexpected work commitment disrupts your plans for the week.\")\nrq_s3_p2 = Text(\"You had considered when running might fit into your schedule, but now things have changed.\")\nrq_c1 = Keyword(\"Plan Ahead\", \"Your first decision\")\nrq_s3_actions = FollowUps([\"Continue\"])\nrq_s3_cue = Cue(\"It's Wednesday. An unexpected work commitment disrupts your plans for the week. You had considered when running might fit into your schedule, but now things have changed.\")\nrq_s4 = Screen([rq_s4_step, rq_s4_title, rq_s4_p1, rq_s4_p2, rq_s4_p3, rq_s4_opt1, rq_s4_opt1_text, rq_s4_opt2, rq_s4_opt2_text, rq_s4_actions, rq_s4_cue])\nrq_s4_step = Text(\"RunQuest · Step 4 of 5\", \"body\", \"#666666\")\nrq_s4_title = Text(\"A Moment to Reflect\", \"title\")\nrq_s4_p1 = Text(\"It's Wednesday evening. Your week hasn't gone as expected.\")\nrq_s4_p2 = Text(\"You still want to make running part of your life, but your current approach hasn't worked out as you imagined.\")\nrq_s4_p3 = Text(\"What would you like to do?\")\nrq_s4_opt1 = Text(\"Reconsider the Approach\", \"subtitle\")\nrq_s4_opt1_text = Text(\"Take another look at your commitments and reflect on how running could fit into your everyday life.\")\nrq_s4_opt2 = Text(\"Leave It for Another Time\", \"subtitle\")\nrq_s4_opt2_text = Text(\"Accept that this week hasn't worked out as expected and revisit the idea later.\")\nrq_s4_actions = FollowUps([\"Reconsider the Approach\",\"Leave It for Another Time\"])\nrq_s4_cue = Cue(\"It's Wednesday evening. Your week hasn't gone as expected. You still want to make running part of your life, but your current approach hasn't worked out as you imagined. What would you like to do?\")\nrq_s5 = Screen([rq_s5_step, rq_s5_title, rq_s5_p1, rq_s5_choices, rq_s5_note, rq_s5_actions, rq_s5_cue])\nrq_s5_step = Text(\"RunQuest · Step 5 of 5\", \"body\", \"#666666\")\nrq_s5_title = Text(\"Your Reflection\", \"title\")\nrq_s5_p1 = Text(\"Your plans changed when an unexpected commitment appeared. You explored how reconsidering your approach can help you think about consistency when circumstances change.\", \"description\")\nrq_s5_choices = List([rq_s5_first, rq_c2])\nrq_s5_first = ListItem(\"First decision: Plan Ahead\")\nrq_c2 = ListItem(\"Second decision: Reconsider the Approach\")\nrq_s5_note = Alert(\"info\", \"RunQuest is a fictional journey about habits and everyday decisions. It isn't advice, a running plan or a recommendation.\")\nrq_s5_actions = FollowUps([\"Try Another Journey\"])\nrq_s5_cue = Cue(\"Your plans changed when an unexpected commitment appeared. You explored how reconsidering your approach can help you think about consistency when circumstances change.\")",
+    "client_events": []
+  },
+  "timers": []
+}

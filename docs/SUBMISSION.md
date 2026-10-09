@@ -29,16 +29,20 @@ The design brief (audience, scenario, voice, safety) is [`skills/workout.md`](..
 
 | Mode | How it was tested |
 | --- | --- |
-| Mock | Automated: unit tests (`npm run check`) and Playwright browser tests with installed Chrome (`npm run test:ui`), including the full button journey. |
-| Ollama, fake/stub transport | Automated: unit tests with a fake `fetch` (classification, narration, validation, timeouts, HTTP/connection failures, sequential budget) and browser tests with stubbed `/api/runtime/ollama` and `/api/turn` routes. |
-| Ollama, live local (`llama3.2:3b`) | Manual only. Server logs from the author's sessions show live classifications (action, unclear, unrelated, rejected) and narration rewrites. Those sessions ran before narration became sequential; the sequential budget has only been tested with the fake transport. No automated live test exists. |
+| Mock, automated | Unit tests (`npm run check`, 95 passing) and Playwright browser tests with installed Chrome (`npm run test:ui`, 19 passing), including the full button journey and recovery with Retry after a simulated invalid-schema or failed request on a RunQuest choice. |
+| Mock, manual | One complete button journey (Plan Ahead, then Reconsider the Approach), exported as [`runs/mock-after.json`](../runs/mock-after.json). The author also tried a local Builder-tools patch and the simulated schema and request faults by hand. |
+| Ollama, fake/stub transport | Automated: unit tests with a fake `fetch` (classification, narration, validation, timeouts, HTTP/connection failures, the sequential shared budget) and browser tests with stubbed `/api/runtime/ollama` and `/api/turn` routes. |
+| Ollama, live local (`llama3.2:3b`) | Manual only. One complete journey on the current build, exported as [`runs/ollama-live.json`](../runs/ollama-live.json). The two decisions were typed in the author's own words, were classified as Plan Ahead and Reconsider the Approach, and reached the matching ending. The server log reported all 9 narrated passages rewritten, with no timeouts or skipped passages. Earlier manual sessions, before narration became sequential, also produced unclear, unrelated and rejected classifications; those outcomes were not repeated on the current build. Timeouts and skipped passages are covered only by the fake-transport tests. No automated live test exists. |
 | OpenAI, Claude | Not tested with RunQuest; no live requests were made. |
 | Codex CLI | Blocked in this build. |
+
+Both run files use the export's fixed "after" label; it does not refer to a before/after comparison.
 
 ## Limitations
 
 - How reliably `llama3.2:3b` picks the right label or produces acceptable rewrites has not been
-  measured; the validation checks are basic word and pattern filters.
+  measured; the validation checks are basic word and pattern filters. In the live run some accepted
+  rewrites shifted the wording's nuance slightly while keeping the facts.
 - A cold model can make the first Ollama turn slow (worst case about 35 seconds).
 - Narration reliability depends on the local machine; passages that do not fit the budget keep the
   original text.
