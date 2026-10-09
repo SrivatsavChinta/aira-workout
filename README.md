@@ -13,7 +13,23 @@ npm start
 
 Open http://127.0.0.1:4319. Stop with Ctrl+C. Change `PORT` in a local `.env` if needed.
 
-The app starts in Mock and needs no account or key. **Load wiring sample** displays generic component examples. Mock accepts `/demo`, `next`, `back`, and `change value to 6`; it does not interpret the skill or arbitrary messages. Use your editor to change files. Prompt/skill edits load on the next request; source changes need a restart and browser reload.
+The app starts in Mock and needs no account or key. **Load wiring sample** displays generic component examples. Mock accepts `/demo`, `next`, `back`, and `change value to 6`; it does not interpret the skill or arbitrary messages. Use your editor to change files. Prompt/skill edits load on the next request. With `npm start`, source changes need a restart and browser reload; `npm run dev` does both for you.
+
+## Develop
+
+```sh
+npm run dev
+```
+
+Leave it running and edit in your editor. It runs one TypeScript watcher and one server (same `.env` handling as `npm start`, plus a development-only refresh channel that `npm start` never enables):
+
+- `src/server/**` or `src/shared/**` `.ts` changes: rebuild, restart the server, then open pages reload.
+- `src/web/*.ts` or `src/web/index.html` changes: rebuild or copy, open pages reload; the server keeps running.
+- `src/web/styles.css` changes: the stylesheet is replaced in place without a reload.
+- `.env` changes: the server restarts automatically with the new values. If you change `PORT`, open the new address yourself.
+- `prompts/` and `skills/` edits need nothing; they load on the next request.
+
+A page reload or server restart clears the in-browser run (conversation, screens and the Ollama selection), as a manual reload would; select Ollama again after a restart. A running Ollama service is reused, not started twice. TypeScript errors are printed in the terminal; the last emitted output still runs. Stop with Ctrl+C. `npm run dev` and `npm start` both use `PORT` (default 4319), so run one at a time or set a different `PORT`.
 
 ## Files
 

@@ -70,7 +70,7 @@ test('selecting Ollama shows starting, checking model and ready; actions stay di
  await runtime.step();await expect(page.locator('#mode')).toHaveText('CHECKING MODEL…');await expect(page.locator('#provider-description')).toHaveText('Checking model llama3.2:3b…');await expect(page.locator('#runquest')).toBeDisabled();
  await runtime.step();await expect(page.locator('#mode')).toHaveText('OLLAMA READY');await expect(page.locator('#runquest')).toBeEnabled();
  expect(runtime.calls).toEqual(['POST','GET','GET']);
- await expect(page.locator('#consent-label')).toHaveText('Send RunQuest story passages to my local Ollama model on Send/Retry.');await page.locator('#consent').check();
+ await expect(page.locator('#consent-label')).toHaveText('Send RunQuest story passages and my typed messages to my local Ollama model on Send/Retry.');await page.locator('#consent').check();
  await page.locator('#runquest').click();await expect(page.locator('#pending')).toBeHidden();expect(sent.provider).toBe('ollama');expect(sent.consent).toBe(true);expect(sent.messages.at(-1).content).toBe('/runquest');
  await expect(page.locator('[data-statement="rq_s1_p1"]')).toHaveText('Two weeks ago, you chose to start running.');await expect(page.locator('#transcript .message.assistant p').last()).toHaveText('RunQuest · Step 1 of 5: Your Running Journey.');await expect(page.locator('#spoken')).toHaveText(await screenNarrative(page));await expect(page.locator('#spoken')).toContainText('Two weeks ago, you chose to start running.');
  for(const lane of ['#transcript','#spoken'])await expect(page.locator(lane)).not.toContainText(/Narrated by|passages rewritten|llama3\.2|The app decided/);

@@ -13,6 +13,7 @@ import { claudeTurn, codexTurn } from './cli.js';
 import { ollamaTurn } from './ollama.js';
 import { OllamaRuntime } from './ollama-runtime.js';
 import { type ProcessTransport } from './subprocess.js';
+import { type DevReload } from './dev-reload.js';
 import { redactValue } from '../shared/redact.js';
 export { readConfig } from './config.js';
 const securityHeaders = {
@@ -32,7 +33,7 @@ async function readBody(req: IncomingMessage): Promise<unknown> {
   try { return JSON.parse(Buffer.concat(chunks).toString('utf8')); }
   catch { throw new PublicError('INPUT', 'Send valid JSON.', 400); }
 }
-export function createApp(config: Config, transport: typeof fetch = fetch, cliTransport?: ProcessTransport, cliResolver?: (path: string) => Promise<string>, ollamaRuntime = new OllamaRuntime(config.ollama, { fetch: transport })) {
+export function createApp(config: Config, transport: typeof fetch = fetch, cliTransport?: ProcessTransport, cliResolver?: (path: string) => Promise<string>, ollamaRuntime = new OllamaRuntime(config.ollama, { fetch: transport }), devReload?: DevReload) {
   const token = randomBytes(32).toString('hex');
   let active = 0;
   const checkToken = (req: IncomingMessage) => {
@@ -49,8 +50,9 @@ export function createApp(config: Config, transport: typeof fetch = fetch, cliTr
     try {
       const path = new URL(req.url ?? '/', 'http://localhost').pathname;
       if (path === '/api/config' && req.method === 'GET') {
-        json(res, 200, { defaultProvider: 'mock', providers: providerStatuses(config), token, appVersion: APP_VERSION }); return;
+        json(res, 200, { defaultProvider: 'mock', providers: providerStatuses(config), token, appVersion: APP_VERSION, devReload: Boolean(devReload) }); return;
       }
+      if (devReload && path === '/api/dev/events' && req.method === 'GET') { devReload.connect(res, securityHeaders); return; }
       if (path === '/api/runtime/ollama' && (req.method === 'POST' || req.method === 'GET')) {
         checkToken(req);
         if (!config.ollama.enabled) throw new PublicError('OPT_IN', 'Set ALLOW_OLLAMA=true in local .env, then restart. See docs/RUNTIMES.md.', 403);
