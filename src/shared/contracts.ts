@@ -1,7 +1,7 @@
 import { list, obj, str, valid } from './schema.js';
 export const APP_VERSION = '2.0.0';
 export const SCHEMA_VERSION = '3';
-export const providers = ['mock', 'openai-api', 'claude-cli', 'codex-cli'] as const;
+export const providers = ['mock', 'openai-api', 'claude-cli', 'codex-cli', 'ollama'] as const;
 export type Provider = typeof providers[number];
 export type ProviderStatus = { id: Provider; label: string; enabled: boolean; model: string; message: string };
 export type Turn = { reply: string };

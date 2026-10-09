@@ -74,3 +74,10 @@ test('HTTP: full RunQuest journey through /api/turn in Mock',async()=>{
   assert.equal(doc.cursor,'rq_s5');assert.equal(child(doc,'rq_s5_p1').props.text,RUNQUEST_ENDINGS['Plan Ahead']['Leave It for Another Time']);
  }finally{await new Promise(r=>server.close(r));}
 });
+test('every RunQuest screen carries a Cue of exactly its rendered narrative passages',()=>{
+ for(const first of FIRST_CHOICES)for(const second of SECOND_CHOICES){const {doc}=play('/runquest','Start your journey',first,'Continue',second);
+  for(const screen of doc.screens){const kids=screen.props.children,cues=kids.filter(n=>n.name==='Cue');assert.equal(cues.length,1,screen.key);
+   assert.equal(cues[0].props.text,kids.filter(n=>/^rq_s\d_p\d+$/.test(n.key)).map(n=>n.props.text).join(' '));for(const label of ['RunQuest · Step','Running days','First decision'])assert(!cues[0].props.text.includes(label));}
+  assert.equal(child(doc,'rq_s5_cue').props.text,RUNQUEST_ENDINGS[first][second]);}
+ assert.equal(child(play('/runquest').doc,'rq_s1_cue').props.text,"Two weeks ago, you decided to start running. Initially, you felt motivated. But lately, work and everyday responsibilities have made it difficult to stay consistent. It's Monday, and you're about to start another week. You want to keep running, but you're still figuring out how to make it part of your routine. Let's see how your decisions shape the week ahead.");
+});
