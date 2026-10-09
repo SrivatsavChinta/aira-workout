@@ -8,4 +8,4 @@ OpenUI is declarative data. Named statements persist across turns; repeating a s
 
 Requests include messages, the current `ui_state` program and queued `client_events`. Responses contain a `reply` string with conversation text and complete OpenUI fences. Builder tools expose this state and allow local patches and run exports.
 
-This slice omits production accounts, databases, memory, native mobile UI, audio, media workers and production tools. Cue is displayed as text. Completed responses are applied atomically rather than streamed. Browser behavior and available components differ from the production client. The generic fixture demonstrates the local protocol; no authored workout flow is included.
+This slice omits production accounts, databases, memory, native mobile UI, audio, media workers and production tools. Cue is displayed as text. Completed responses are applied atomically rather than streamed. Browser behavior and available components differ from the production client. The generic fixture demonstrates the local protocol. The authored experience is RunQuest (`src/server/runquest.ts`); see [the submission summary](SUBMISSION.md).

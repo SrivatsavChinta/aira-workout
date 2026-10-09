@@ -1,9 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
-import {ollamaTurn,rewritePassage,validateNarration,validateClassification,NARRATION_SYSTEM,OLLAMA_OPTIONS,CLASSIFY_SYSTEM,CLASSIFY_OPTIONS} from '../dist/server/ollama.js';
+import {ollamaTurn,rewritePassage,rewritePassages,validateNarration,validateClassification,NARRATION_SYSTEM,OLLAMA_OPTIONS,CLASSIFY_SYSTEM,CLASSIFY_OPTIONS,NARRATION_MIN_ATTEMPT_MS} from '../dist/server/ollama.js';
 import {mockTurn} from '../dist/server/mock.js';
-import {FIRST_CHOICES,SECOND_CHOICES,RUNQUEST_ENDINGS,currentActions} from '../dist/server/runquest.js';
+import {FIRST_CHOICES,SECOND_CHOICES,RUNQUEST_ENDINGS,RUNQUEST_CONSEQUENCES,currentActions} from '../dist/server/runquest.js';
 import {ScreenDocument,splitReply} from '../dist/shared/openui/document.js';
 import {createApp,readConfig} from '../dist/server/app.js';
 import {providerStatuses} from '../dist/server/config.js';
@@ -77,8 +77,9 @@ test('choices, prompts and labels are never sent for rewriting',async()=>{
 test('Ollama unavailable: the journey continues with canonical text; the failure goes to the server log, not the reply',async()=>{
  let attempts=0;const down=async()=>{attempts++;throw new TypeError('connect ECONNREFUSED');};
  const {doc,mock,replies,mockReplies,logs}=await play(JOURNEY('Plan Ahead','Leave It for Another Time'),down);
- assert.equal(doc.echo(),mock.echo());assert(attempts>0);assert.deepEqual(replies,mockReplies);for(const reply of replies)assert.doesNotMatch(reply,DIAGNOSTIC);
- for(const line of logs)assert.match(line,/0\/(\d+) passages rewritten; \1 kept canonical text \(unavailable \1\)$/);
+ assert.equal(doc.echo(),mock.echo());assert.equal(attempts,5);assert.deepEqual(replies,mockReplies);for(const reply of replies)assert.doesNotMatch(reply,DIAGNOSTIC);
+ assert.match(logs[0],/0\/3 passages rewritten; 3 kept canonical text \(unavailable 1, skipped 2\)$/);
+ for(const line of logs.slice(1))assert.match(line,/0\/(\d+) passages rewritten; \1 kept canonical text \(unavailable 1(, skipped \d+)?\)$/);
 });
 test('invalid model output falls back per passage without affecting the screen',async()=>{
  let n=0;const mixed=async(_u,init)=>ollamaReply({response:n++%2?'```openui\nrq_c1 = Keyword("Stay Flexible")\n```':PREFIX+passageOf(init),done:true});
@@ -119,7 +120,7 @@ test('HTTP: Ollama runtime requires enablement, readiness and consent, records t
   const doc=new ScreenDocument();doc.apply(data.turn.reply);assert.equal(doc.cursor,'rq_s1');assert.equal(child(doc,'rq_week').props.items.length,7);
   assert.doesNotMatch(splitReply(data.turn.reply).prose,DIAGNOSTIC);assert.equal(child(doc,'rq_s1_p1').props.text,PREFIX+'Two weeks ago, you decided to start running.');
   generateUp=false;const r=await a.call('/api/turn','POST',req('/runquest'));assert.equal(r.status,200);const fallback=new ScreenDocument();fallback.apply((await r.json()).turn.reply);assert.equal(child(fallback,'rq_s1_p1').props.text,'Two weeks ago, you decided to start running.');assert.doesNotMatch(fallback.prose,DIAGNOSTIC);
-  assert.equal(logged.length,2);assert.match(logged[0],/3\/3 passages rewritten$/);assert.match(logged[1],/0\/3 passages rewritten; 3 kept canonical text \(unavailable 3\)$/);
+  assert.equal(logged.length,2);assert.match(logged[0],/3\/3 passages rewritten$/);assert.match(logged[1],/0\/3 passages rewritten; 3 kept canonical text \(unavailable 1, skipped 2\)$/);
  }finally{await a.close();console.info=info;}
  assert(urls.length>0&&urls.every(u=>u.startsWith('http://localhost:11434/api/')));
 });
@@ -295,4 +296,47 @@ test('typed restart on the final screen restarts cleanly; exact restart still wo
 test('Mock stays exact-command only: typed equivalents are not interpreted',()=>{
  const doc=exactMock(['/runquest','Start your journey']);const reply=mockTurn({...req(SAID['Stay Flexible'],doc.echo()),provider:'mock'},fixture).reply;
  assert(reply.includes('Mock only understands'));assert(!reply.includes('```'));
+});
+
+// Narration runs one request at a time within one shared budget per turn.
+const PASSAGES=['Two weeks ago, you decided to start running.','Initially, you felt motivated.',"It's Monday, and you're about to start another week."];
+const hang=(_u,init)=>new Promise((_,reject)=>init.signal.addEventListener('abort',()=>reject(new DOMException('aborted','AbortError'))));
+test('narration requests are sequential, in screen order, and never overlap',async()=>{
+ let active=0,peak=0;const order=[];
+ const slow=async(url,init)=>{active++;peak=Math.max(peak,active);order.push(passageOf(init));await new Promise(r=>setTimeout(r,15));active--;return rewriting()(url,init);};
+ const results=await rewritePassages(PASSAGES,config,signal(),slow);
+ assert.equal(peak,1);assert.deepEqual(order,PASSAGES);assert.deepEqual(results.map(r=>r.outcome),['rewritten','rewritten','rewritten']);assert.deepEqual(results.map(r=>r.text),PASSAGES.map(p=>PREFIX+p));
+ const calls=[];const {doc}=await play(['/runquest'],async(url,init)=>{calls.push(passageOf(init));return rewriting()(url,init);});
+ assert.deepEqual(calls,[child(doc,'rq_s1_p1').props.text,child(doc,'rq_s1_p2').props.text,child(doc,'rq_s1_p3').props.text].map(t=>t.replace(PREFIX,'')));
+});
+test('the shared budget limits the whole turn: passages that do not fit keep canonical text without a request',async()=>{
+ let clock=0,calls=0;const ticking=async(url,init)=>{calls++;clock+=900;return rewriting()(url,init);};
+ const results=await rewritePassages(PASSAGES,{...config,timeoutMs:2000},signal(),ticking,()=>clock);
+ assert.equal(calls,2);assert.deepEqual(results.map(r=>r.outcome),['rewritten','rewritten','skipped']);assert.equal(results[2].text,PASSAGES[2]);
+ assert(2000-1800<NARRATION_MIN_ATTEMPT_MS);
+});
+test('a narration timeout ends the turn at the shared budget and skips the remaining passages',async()=>{
+ let calls=0;const counted=async(u,init)=>{calls++;return hang(u,init);};const started=Date.now();
+ const results=await rewritePassages(PASSAGES,{...config,timeoutMs:900},signal(),counted);
+ const elapsed=Date.now()-started;assert.equal(calls,1);assert(elapsed<1500,`took ${elapsed} ms`);
+ assert.deepEqual(results.map(r=>r.outcome),['timeout','skipped','skipped']);assert.deepEqual(results.map(r=>r.text),PASSAGES);
+});
+test('HTTP and connection failures stop further narration requests; rejected output does not',async()=>{
+ for(const [transport,first] of [[async()=>ollamaReply('boom',{status:500}),'http'],[async()=>{throw new TypeError('fetch failed');},'unavailable']]){
+  let calls=0;const results=await rewritePassages(PASSAGES,config,signal(),async(u,init)=>{calls++;return transport(u,init);});
+  assert.equal(calls,1,first);assert.deepEqual(results.map(r=>r.outcome),[first,'skipped','skipped']);assert.deepEqual(results.map(r=>r.text),PASSAGES);}
+ let calls=0;const results=await rewritePassages(PASSAGES,config,signal(),async()=>{calls++;return ollamaReply({response:'Run 3 km at an easy pace tonight.',done:true});});
+ assert.equal(calls,3);assert.deepEqual(results.map(r=>r.outcome),['rejected','rejected','rejected']);assert.deepEqual(results.map(r=>r.text),PASSAGES);
+ const aborted=new AbortController();aborted.abort();let none=0;
+ assert.deepEqual((await rewritePassages(PASSAGES,config,aborted.signal,async()=>{none++;return rewriting()();})).map(r=>r.outcome),['skipped','skipped','skipped']);assert.equal(none,0);
+});
+test('a valid typed or button choice still advances when narration times out',async()=>{
+ const stalls=(u,init)=>JSON.parse(init.body).system===CLASSIFY_SYSTEM?byLabel()(u,init):hang(u,init);
+ const budget={...config,timeoutMs:1000};
+ for(const [first,message] of [['Stay Flexible',SAID['Stay Flexible']],['Plan Ahead','Plan Ahead']]){
+  const {doc}=await talk(TO_FIRST_DECISION,byLabel());const logs=[];const started=Date.now();
+  const {turn}=await ollamaTurn(req(message,doc.echo()),budget,signal(),stalls,line=>logs.push(line));doc.apply(turn.reply);
+  assert(Date.now()-started<1600,first);assert.equal(doc.cursor,'rq_s3',first);assert.equal(child(doc,'rq_c1').props.text,first);
+  assert.equal(child(doc,'rq_s3_p1').props.text,RUNQUEST_CONSEQUENCES[first].story[0]);assert.equal(child(doc,'rq_s3_p2').props.text,RUNQUEST_CONSEQUENCES[first].story[1]);
+  assert.match(logs.at(-1),/0\/2 passages rewritten; 2 kept canonical text \(timeout 1, skipped 1\)$/,first);}
 });

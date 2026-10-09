@@ -20,7 +20,9 @@ export const NARRATION_SYSTEM = [
   '- Output only the rewritten passage as plain text, with no quotes, labels, lists, markdown or code.',
 ].join('\n');
 
-export type NarrationOutcome = 'rewritten' | 'rejected' | 'malformed' | 'http' | 'timeout' | 'unavailable';
+export type NarrationOutcome = 'rewritten' | 'rejected' | 'malformed' | 'http' | 'timeout' | 'unavailable' | 'skipped';
+/** A passage is not attempted when less than this remains of the turn's narration budget. */
+export const NARRATION_MIN_ATTEMPT_MS = 750;
 const PROHIBITED = /\b(doctors?|medical|medicine|injur\w*|pain\w*|heart|pulse|calori\w*|diet\w*|weight|stretch\w*|warm[- ]?up|cool[- ]?down|pace|intervals?|sprint\w*|tempo|kilomet\w*|km|miles?|minutes?|hours?|reps?|training plan|workout plan|you should|you must|make sure|be sure to|aim for|push yourself|hydrat\w*)\b/i;
 const MALFORMED = /[`<>{}[\]=#*_|\\\d]|openui|\b[A-Z]\w*\(|^(here|sure|rewritten|passage|output)\b/i;
 const FIRST_PERSON = /\b(I|I'm|I've|I'll|me|my|mine|myself)\b/;
@@ -60,11 +62,31 @@ export async function rewritePassage(passage: string, config: OllamaConfig, sign
   } finally { clearTimeout(timer); }
 }
 
+/**
+ * Rewrites passages one at a time, in screen order, within one shared budget of `config.timeoutMs`.
+ * A local model serves one request at a time, so parallel calls would only queue and time out.
+ * After a timeout, HTTP error or connection failure the remaining passages are skipped; every
+ * passage that is not rewritten keeps its canonical text.
+ */
+export async function rewritePassages(passages: string[], config: OllamaConfig, signal: AbortSignal, transport: typeof fetch = fetch, now: () => number = Date.now): Promise<{ text: string; outcome: NarrationOutcome; model: string | null }[]> {
+  const deadline = now() + config.timeoutMs;
+  const results: { text: string; outcome: NarrationOutcome; model: string | null }[] = [];
+  let stop = false;
+  for (const passage of passages) {
+    const remaining = deadline - now();
+    if (stop || signal.aborted || remaining < NARRATION_MIN_ATTEMPT_MS) { results.push({ text: passage, outcome: 'skipped', model: null }); continue; }
+    const result = await rewritePassage(passage, { ...config, timeoutMs: remaining }, signal, transport);
+    results.push(result);
+    if (result.outcome === 'timeout' || result.outcome === 'http' || result.outcome === 'unavailable') stop = true;
+  }
+  return results;
+}
+
 /** Developer-facing narration summary for server logs; never part of the user-facing reply. */
 export function narrationSummary(outcomes: NarrationOutcome[], config: OllamaConfig): string {
   const count = (outcome: NarrationOutcome) => outcomes.filter(o => o === outcome).length;
   const kept = outcomes.length - count('rewritten');
-  const reasons = (['rejected', 'malformed', 'http', 'timeout', 'unavailable'] as const).filter(o => count(o)).map(o => `${o} ${count(o)}`).join(', ');
+  const reasons = (['rejected', 'malformed', 'http', 'timeout', 'unavailable', 'skipped'] as const).filter(o => count(o)).map(o => `${o} ${count(o)}`).join(', ');
   return `[ollama] ${config.model} at ${config.url}: ${count('rewritten')}/${outcomes.length} passages rewritten${kept ? `; ${kept} kept canonical text (${reasons})` : ''}`;
 }
 
@@ -159,7 +181,7 @@ export async function ollamaTurn(request: RequestData, config: OllamaConfig, sig
     if (!draft) return { turn: { reply: unchangedReply(choice, 'rejected') }, returnedModel: classifiedBy };
   }
   if (!passages.size) return { turn: draft, returnedModel: classifiedBy };
-  const results = await Promise.all([...passages].map(passage => rewritePassage(passage, config, signal, transport)));
+  const results = await rewritePassages([...passages], config, signal, transport);
   const rewrites = new Map([...passages].map((passage, i) => [passage, results[i].text]));
   const turn = runQuestTurn(command, doc, passage => rewrites.get(passage) ?? passage)!;
   log(narrationSummary(results.map(r => r.outcome), config));
