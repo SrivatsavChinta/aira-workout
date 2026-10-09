@@ -10,6 +10,8 @@ import { ScreenDocument } from '../shared/openui/document.js';
 import { liveTurn, PublicError } from './provider.js';
 import { providerStatuses, type Config } from './config.js';
 import { claudeTurn, codexTurn } from './cli.js';
+import { ollamaTurn } from './ollama.js';
+import { OllamaRuntime } from './ollama-runtime.js';
 import { type ProcessTransport } from './subprocess.js';
 import { redactValue } from '../shared/redact.js';
 export { readConfig } from './config.js';
@@ -30,9 +32,13 @@ async function readBody(req: IncomingMessage): Promise<unknown> {
   try { return JSON.parse(Buffer.concat(chunks).toString('utf8')); }
   catch { throw new PublicError('INPUT', 'Send valid JSON.', 400); }
 }
-export function createApp(config: Config, transport: typeof fetch = fetch, cliTransport?: ProcessTransport, cliResolver?: (path: string) => Promise<string>) {
+export function createApp(config: Config, transport: typeof fetch = fetch, cliTransport?: ProcessTransport, cliResolver?: (path: string) => Promise<string>, ollamaRuntime = new OllamaRuntime(config.ollama, { fetch: transport })) {
   const token = randomBytes(32).toString('hex');
   let active = 0;
+  const checkToken = (req: IncomingMessage) => {
+    const supplied = Buffer.from(String(req.headers['x-local-token'] ?? ''));
+    if (supplied.length !== token.length || !timingSafeEqual(supplied, Buffer.from(token))) throw new PublicError('FORBIDDEN', 'Reload the local app before sending.', 403);
+  };
   const server = createServer(async (req, res) => {
     const address = server.address();
     const port = typeof address === 'object' && address ? address.port : 4319;
@@ -45,15 +51,20 @@ export function createApp(config: Config, transport: typeof fetch = fetch, cliTr
       if (path === '/api/config' && req.method === 'GET') {
         json(res, 200, { defaultProvider: 'mock', providers: providerStatuses(config), token, appVersion: APP_VERSION }); return;
       }
+      if (path === '/api/runtime/ollama' && (req.method === 'POST' || req.method === 'GET')) {
+        checkToken(req);
+        if (!config.ollama.enabled) throw new PublicError('OPT_IN', 'Set ALLOW_OLLAMA=true in local .env, then restart. See docs/RUNTIMES.md.', 403);
+        json(res, 200, req.method === 'POST' ? ollamaRuntime.start() : ollamaRuntime.status); return;
+      }
       if (path === '/api/turn' && req.method === 'POST') {
-        const supplied = Buffer.from(String(req.headers['x-local-token'] ?? ''));
-        if (supplied.length !== token.length || !timingSafeEqual(supplied, Buffer.from(token))) throw new PublicError('FORBIDDEN', 'Reload the local app before sending.', 403);
+        checkToken(req);
         if (req.headers['content-type'] !== 'application/json') throw new PublicError('INPUT', 'Expected application/json.', 415);
         const input = await readBody(req);
         if (!isRequest(input)) throw new PublicError('INPUT', 'The conversation request is invalid. Reset and try again.', 400);
         if (input.provider === 'codex-cli') await codexTurn();
         const provider = providerStatuses(config).find(item => item.id === input.provider)!;
         if (!provider.enabled || (input.provider !== 'mock' && !input.consent)) throw new PublicError('OPT_IN', 'This provider needs local setup and explicit usage consent before sending. Check the provider selector and README.', 403);
+        if (input.provider === 'ollama' && !ollamaRuntime.ready) throw new PublicError('RUNTIME', 'Ollama is not ready. Select Ollama and wait for "Ollama ready" before sending.', 409);
         if (active >= 3) throw new PublicError('BUSY', 'Too many pending requests. Cancel and try again.', 429);
         active++;
         const controller = new AbortController();
@@ -72,6 +83,9 @@ export function createApp(config: Config, transport: typeof fetch = fetch, cliTr
           } else if (input.provider === 'claude-cli') {
             const result = await claudeTurn(input, skill, config.claude, controller.signal, cliTransport, cliResolver);
             turn = result.turn; versions.returnedModel = result.returnedModel; versions.runtimeVersion = result.runtimeVersion; versions.restrictionProfile = result.restrictionProfile;
+          } else if (input.provider === 'ollama') {
+            const result = await ollamaTurn(input, config.ollama, controller.signal, transport);
+            turn = result.turn; versions.returnedModel = result.returnedModel;
           } else {
             if (!config.allowLive || !config.key) throw new PublicError('CONFIG', 'Live access is not enabled.', 403);
             const result = await liveTurn(input, skill, { key: config.key, model: config.model }, controller.signal, transport);

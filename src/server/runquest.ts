@@ -27,9 +27,14 @@ export const RUNQUEST_COMMANDS = ['/runquest', 'start runquest'];
 const SCREENS = ['rq_s1', 'rq_s2', 'rq_s3', 'rq_s4', 'rq_s5'];
 const RESTART = 'Try Another Journey';
 
-type Part = { name: string; lines: string[] };
+type Part = { name: string; lines: string[]; spoken?: string };
 const part = (name: string, component: string, ...args: unknown[]): Part => ({ name, lines: [serializeStatement(name, component, args)] });
-const paragraphs = (prefix: string, texts: string[]): Part[] => texts.map((text, i) => part(`${prefix}_p${i + 1}`, 'Text', text));
+/** A displayed story passage that is also read into the screen's Cue, so the spoken-text lane matches the screen. */
+const passage = (name: string, text: string, ...style: string[]): Part => ({ ...part(name, 'Text', text, ...style), spoken: text });
+/** Rewrites a canonical story passage for display; it never sees or changes screens, choices or state. */
+export type Narrate = (passage: string) => string;
+const canonical: Narrate = passage => passage;
+const paragraphs = (prefix: string, texts: string[], narrate: Narrate): Part[] => texts.map((text, i) => passage(`${prefix}_p${i + 1}`, narrate(text)));
 const km = (value: number) => `${value.toFixed(1)} km`;
 const NO_RUN = '—';
 const match = <T extends string>(options: readonly T[], input: string) => options.find(option => option.toLowerCase() === input);
@@ -44,7 +49,8 @@ function choiceParts(prefix: string, choices: readonly string[], descriptions: s
 }
 function screen(index: number, title: string, parts: Part[]): string[] {
   const id = SCREENS[index - 1];
-  const all = [part(`${id}_step`, 'Text', `RunQuest · Step ${index} of 5`, 'body', '#666666'), part(`${id}_title`, 'Text', title, 'title'), ...parts];
+  const spoken = parts.flatMap(p => p.spoken ?? []);
+  const all = [part(`${id}_step`, 'Text', `RunQuest · Step ${index} of 5`, 'body', '#666666'), part(`${id}_title`, 'Text', title, 'title'), ...parts, ...(spoken.length ? [part(`${id}_cue`, 'Cue', spoken.join(' '))] : [])];
   return [`${id} = Screen([${all.map(p => p.name).join(', ')}])`, ...all.flatMap(p => p.lines)];
 }
 function step(index: number, title: string, parts: Part[]): Turn {
@@ -52,7 +58,7 @@ function step(index: number, title: string, parts: Part[]): Turn {
   return { reply: `RunQuest · Step ${index} of 5: ${title}.\n` + fence([root, ...screen(index, title, parts)].join('\n')) };
 }
 
-function introduction(): Turn {
+function introduction(narrate: Narrate): Turn {
   const runDays = RUNQUEST_HISTORY.filter(entry => entry.km > 0).length;
   const total = RUNQUEST_HISTORY.reduce((sum, entry) => sum + entry.km, 0);
   const turn = step(1, 'Your Running Journey', [
@@ -60,8 +66,8 @@ function introduction(): Turn {
       'Two weeks ago, you decided to start running.',
       'Initially, you felt motivated. But lately, work and everyday responsibilities have made it difficult to stay consistent.',
       "It's Monday, and you're about to start another week. You want to keep running, but you're still figuring out how to make it part of your routine.",
-      "Let's see how your decisions shape the week ahead.",
-    ]),
+    ], narrate),
+    passage('rq_s1_p4', "Let's see how your decisions shape the week ahead."),
     part('rq_s1_history', 'Text', 'Your Running History', 'subtitle'),
     part('rq_s1_period', 'Text', 'Your previous seven days', 'body', '#666666'),
     calendar(),
@@ -71,8 +77,9 @@ function introduction(): Turn {
   ]);
   return { reply: fence('root = Screens([])') + '\n' + turn.reply };
 }
-const newWeek = () => step(2, 'A New Week', [
-  ...paragraphs('rq_s2', ["You look at your calendar. It's going to be a busy week, and you're not sure how running will fit into it.", 'How do you want to approach the week?']),
+const newWeek = (narrate: Narrate) => step(2, 'A New Week', [
+  ...paragraphs('rq_s2', ["You look at your calendar. It's going to be a busy week, and you're not sure how running will fit into it."], narrate),
+  passage('rq_s2_p2', 'How do you want to approach the week?'),
   ...choiceParts('rq_s2', FIRST_CHOICES, ['You look at your existing commitments and consider when running might fit into your schedule.', 'You decide to see how the week unfolds and figure things out as you go.']),
   part('rq_s2_actions', 'FollowUps', [...FIRST_CHOICES]),
 ]);
@@ -80,18 +87,19 @@ export const RUNQUEST_CONSEQUENCES: Record<First, { title: string; story: string
   'Plan Ahead': { title: 'An Unexpected Change', story: ["It's Wednesday. An unexpected work commitment disrupts your plans for the week.", 'You had considered when running might fit into your schedule, but now things have changed.'] },
   'Stay Flexible': { title: 'Where Did the Week Go?', story: ["It's Wednesday. Work has been busier than expected, and you haven't found an opportunity to think about running.", 'You wanted to make it part of your routine, but other priorities have taken over.'] },
 };
-function consequence(first: First): Turn {
+function consequence(first: First, narrate: Narrate): Turn {
   const { title, story } = RUNQUEST_CONSEQUENCES[first];
-  return step(3, title, [...paragraphs('rq_s3', story), part('rq_c1', 'Keyword', first, 'Your first decision'), part('rq_s3_actions', 'FollowUps', ['Continue'])]);
+  return step(3, title, [...paragraphs('rq_s3', story, narrate), part('rq_c1', 'Keyword', first, 'Your first decision'), part('rq_s3_actions', 'FollowUps', ['Continue'])]);
 }
-const reflect = () => step(4, 'A Moment to Reflect', [
-  ...paragraphs('rq_s4', ["It's Wednesday evening. Your week hasn't gone as expected.", "You still want to make running part of your life, but your current approach hasn't worked out as you imagined.", 'What would you like to do?']),
+const reflect = (narrate: Narrate) => step(4, 'A Moment to Reflect', [
+  ...paragraphs('rq_s4', ["It's Wednesday evening. Your week hasn't gone as expected.", "You still want to make running part of your life, but your current approach hasn't worked out as you imagined."], narrate),
+  passage('rq_s4_p3', 'What would you like to do?'),
   ...choiceParts('rq_s4', SECOND_CHOICES, ['Take another look at your commitments and reflect on how running could fit into your everyday life.', "Accept that this week hasn't worked out as expected and revisit the idea later."]),
   part('rq_s4_actions', 'FollowUps', [...SECOND_CHOICES]),
 ]);
-function conclusion(first: First, second: Second): Turn {
+function conclusion(first: First, second: Second, narrate: Narrate): Turn {
   return step(5, 'Your Reflection', [
-    part('rq_s5_p1', 'Text', RUNQUEST_ENDINGS[first][second], 'description'),
+    passage('rq_s5_p1', narrate(RUNQUEST_ENDINGS[first][second]), 'description'),
     { name: 'rq_s5_choices', lines: ['rq_s5_choices = List([rq_s5_first, rq_c2])', serializeStatement('rq_s5_first', 'ListItem', [`First decision: ${first}`]), serializeStatement('rq_c2', 'ListItem', [`Second decision: ${second}`])] },
     part('rq_s5_note', 'Alert', 'info', "RunQuest is a fictional journey about habits and everyday decisions. It isn't advice, a running plan or a recommendation."),
     part('rq_s5_actions', 'FollowUps', [RESTART]),
@@ -106,14 +114,14 @@ function recordedFirst(doc: ScreenDocument): First | undefined {
 }
 
 /** A RunQuest reply for a lowercased command, or null when the command is not RunQuest's. */
-export function runQuestTurn(command: string, doc: ScreenDocument): Turn | null {
-  if (RUNQUEST_COMMANDS.includes(command) || command === RESTART.toLowerCase()) return introduction();
+export function runQuestTurn(command: string, doc: ScreenDocument, narrate: Narrate = canonical): Turn | null {
+  if (RUNQUEST_COMMANDS.includes(command) || command === RESTART.toLowerCase()) return introduction(narrate);
   const first = match(FIRST_CHOICES, command), second = match(SECOND_CHOICES, command);
   if (command !== 'start your journey' && command !== 'continue' && !first && !second) return null;
   if (!hasScreen(doc, 'rq_s1')) return null;
-  if (command === 'start your journey') return newWeek();
-  if (first) return hasScreen(doc, 'rq_s2') ? consequence(first) : outOfOrder();
+  if (command === 'start your journey') return newWeek(narrate);
+  if (first) return hasScreen(doc, 'rq_s2') ? consequence(first, narrate) : outOfOrder();
   const recorded = recordedFirst(doc);
-  if (command === 'continue') return recorded && hasScreen(doc, 'rq_s3') ? reflect() : outOfOrder();
-  return recorded && second && hasScreen(doc, 'rq_s4') ? conclusion(recorded, second) : outOfOrder();
+  if (command === 'continue') return recorded && hasScreen(doc, 'rq_s3') ? reflect(narrate) : outOfOrder();
+  return recorded && second && hasScreen(doc, 'rq_s4') ? conclusion(recorded, second, narrate) : outOfOrder();
 }

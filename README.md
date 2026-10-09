@@ -35,8 +35,14 @@ npm run test:ui
 npm run package
 ```
 
-The browser checks start a mock server on port 4320. To use an installed Chrome instead, set `PLAYWRIGHT_CHROME_PATH` to its absolute executable path.
+The browser checks start a mock server on port 4320 from the current `dist/` build, so run `npm run check` (or `npm run build`) first. They need either Playwright's bundled Chromium (`npx playwright install chromium`, a one-time download) or an installed Chrome. To use an installed Chrome instead, set `PLAYWRIGHT_CHROME_PATH` to its absolute executable path; on macOS:
+
+```sh
+PLAYWRIGHT_CHROME_PATH="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" npm run test:ui
+```
+
+If the variable points to a missing or non-executable file, the run stops with a configuration error instead of falling back to another browser. Without the variable, an error mentioning `ms-playwright/.../headless_shell` means the bundled Chromium is not installed; install it or set `PLAYWRIGHT_CHROME_PATH`.
 
 Packaging writes `output/workout-source.zip` locally. It includes source and records changes against this starter's baseline; it excludes `.env`, dependencies, build output and repository history. It does not submit anything. Builder tools can export a local run; optional run JSON files can be placed in `runs/`. Keep credentials out of source and exports.
 
-The supplied tests exercise local harness behavior with fake transports. Live OpenAI and Claude requests have not been verified. This browser slice is not the production AiRA application.
+The supplied tests exercise local harness behavior with fake transports. Live OpenAI and Claude requests have not been verified. The optional Ollama RunQuest narration is described in [runtime setup](docs/RUNTIMES.md): copy `.env.example` to `.env`, set `ALLOW_OLLAMA=true`, run `npm start` and select Ollama. Ollama is only checked or started when you select it; models are never downloaded. This browser slice is not the production AiRA application.
